@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Worker - Health Card Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; max-width:900px; margin:auto; }
+    input, textarea { width:100%; padding:8px; margin:6px 0; }
+    .card { border:1px solid #ddd; padding:12px; border-radius:8px; margin-top:12px; }
+    .qr { max-width:200px; }
+  </style>
+</head>
+<body>
+  <h2>Migrant Worker - Register (Demo)</h2>
+
+  <div class="card">
+    <label>Name</label>
+    <input id="name" placeholder="Ramesh" />
+    <label>Phone</label>
+    <input id="phone" placeholder="+91..." />
+    <label>ABHA (optional)</label>
+    <input id="abha" placeholder="ABHA id" />
+    <label>Blood group</label>
+    <input id="blood_group" placeholder="B+ / O- ..." />
+    <label>Allergies</label>
+    <input id="allergies" placeholder="Penicillin, Dust..." />
+    <label>Chronic conditions</label>
+    <textarea id="chronic" placeholder="Diabetes, Hypertension..."></textarea>
+    <button id="register">Register & Generate Health Card</button>
+  </div>
+
+  <div id="result" style="display:none" class="card">
+    <h3>Your Health Card</h3>
+    <img id="qrimg" class="qr" src="" alt="QR" />
+    <p><strong>Health ID:</strong> <span id="hid"></span></p>
+    <p>Open this link (scanned by doctor): <a id="hlink" target="_blank"></a></p>
+    <h4>Latest access request (demo)</h4>
+    <div id="lastreq">No requests yet</div>
+  </div>
+
+<script>
+const registerBtn = document.getElementById('register');
+registerBtn.onclick = async () => {
+  const payload = {
+    name: document.getElementById('name').value,
+    phone: document.getElementById('phone').value,
+    abha: document.getElementById('abha').value,
+    blood_group: document.getElementById('blood_group').value,
+    allergies: document.getElementById('allergies').value,
+    chronic: document.getElementById('chronic').value
+  };
+  const res = await fetch('/api/register_worker', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('qrimg').src = data.qr_url;
+  document.getElementById('hid').innerText = data.health_id;
+  document.getElementById('hlink').href = `/health/${data.health_id}`;
+  document.getElementById('hlink').innerText = `http://localhost:8000/health/${data.health_id}`;
+
+  // start polling for access requests
+  startPolling(data.health_id);
+};
+
+let pollInterval = null;
+function startPolling(health_id) {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    const resp = await fetch(`/api/access_requests/${health_id}`);
+    const json = await resp.json();
+    const last = json.last_request;
+    const div = document.getElementById('lastreq');
+    if (!last) {
+      div.innerText = "No requests yet";
+      return;
+    }
+    div.innerHTML = `
+      Doctor: ${last.doctor_phone} <br/>
+      OTP (demo): <strong>${last.otp}</strong> <br/>
+      OTP Expiry: ${new Date(last.otp_expiry).toLocaleString()} <br/>
+      Approved: ${last.approved}
+    `;
+  }, 3000);
+}
+</script>
+</body>
+</html>
